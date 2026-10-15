@@ -1,1 +1,158 @@
- 
+name: "Global Sample Supply Chain"
+version: "1.0.0"
+description: "Sample digital twin network with 2 suppliers, 1 factory, 2 regional warehouses, and 3 customer clusters."
+
+suppliers:
+  - id: "SUP_1"
+    name: "Alpha Electronics (Primary)"
+    location: "Shenzhen, CN"
+    daily_capacity: 120.0
+    unit_cost: 45.0
+    reliability: 0.98
+
+  - id: "SUP_2"
+    name: "Beta Components (Backup)"
+    location: "Penang, MY"
+    daily_capacity: 80.0
+    unit_cost: 52.0
+    reliability: 0.95
+
+factories:
+  - id: "FAC_1"
+    name: "Central Assembly Plant"
+    location: "Hai Phong, VN"
+    daily_capacity: 150.0
+    holding_cost_per_day: 0.50
+    inventory_policy:
+      initial_inventory: 250.0
+      reorder_point: 120.0
+      order_quantity: 200.0
+      safety_stock: 60.0
+      capacity: 600.0
+
+warehouses:
+  - id: "WH_A"
+    name: "North America Hub (Region A)"
+    location: "Long Beach, US"
+    holding_cost_per_day: 0.80
+    stockout_penalty_per_day: 25.0
+    inventory_policy:
+      initial_inventory: 180.0
+      reorder_point: 90.0
+      order_quantity: 160.0
+      safety_stock: 45.0
+      capacity: 500.0
+
+  - id: "WH_B"
+    name: "Europe Hub (Region B)"
+    location: "Rotterdam, NL"
+    holding_cost_per_day: 0.90
+    stockout_penalty_per_day: 28.0
+    inventory_policy:
+      initial_inventory: 140.0
+      reorder_point: 80.0
+      order_quantity: 130.0
+      safety_stock: 40.0
+      capacity: 400.0
+
+customers:
+  - id: "CUST_1"
+    name: "US West Retailers"
+    location: "Los Angeles, US"
+    revenue_per_unit: 140.0
+    demand:
+      distribution: "normal"
+      mean: 28.0
+      std: 6.0
+
+  - id: "CUST_2"
+    name: "US Central Distributors"
+    location: "Chicago, US"
+    revenue_per_unit: 145.0
+    demand:
+      distribution: "normal"
+      mean: 22.0
+      std: 5.0
+
+  - id: "CUST_3"
+    name: "EU Continental Stores"
+    location: "Frankfurt, DE"
+    revenue_per_unit: 150.0
+    demand:
+      distribution: "normal"
+      mean: 32.0
+      std: 7.0
+
+lanes:
+  # Supplier -> Factory
+  - id: "LANE_SUP1_FAC1"
+    origin: "SUP_1"
+    destination: "FAC_1"
+    mode: "ocean"
+    lead_time_mean: 4.0
+    lead_time_std: 1.0
+    cost_per_unit: 4.0
+    capacity: 150.0
+    co2_per_unit: 1.8
+
+  - id: "LANE_SUP2_FAC1"
+    origin: "SUP_2"
+    destination: "FAC_1"
+    mode: "ocean"
+    lead_time_mean: 5.0
+    lead_time_std: 1.2
+    cost_per_unit: 5.5
+    capacity: 100.0
+    co2_per_unit: 2.2
+
+  # Factory -> Warehouses
+  - id: "LANE_FAC1_WHA"
+    origin: "FAC_1"
+    destination: "WH_A"
+    mode: "ocean"
+    lead_time_mean: 14.0
+    lead_time_std: 2.5
+    cost_per_unit: 12.0
+    capacity: 160.0
+    co2_per_unit: 6.5
+
+  - id: "LANE_FAC1_WHB"
+    origin: "FAC_1"
+    destination: "WH_B"
+    mode: "ocean"
+    lead_time_mean: 18.0
+    lead_time_std: 3.0
+    cost_per_unit: 15.0
+    capacity: 140.0
+    co2_per_unit: 8.0
+
+  # Warehouses -> Customers
+  - id: "LANE_WHA_CUST1"
+    origin: "WH_A"
+    destination: "CUST_1"
+    mode: "road"
+    lead_time_mean: 2.0
+    lead_time_std: 0.5
+    cost_per_unit: 3.0
+    capacity: 80.0
+    co2_per_unit: 0.9
+
+  - id: "LANE_WHA_CUST2"
+    origin: "WH_A"
+    destination: "CUST_2"
+    mode: "rail"
+    lead_time_mean: 4.0
+    lead_time_std: 0.8
+    cost_per_unit: 4.5
+    capacity: 60.0
+    co2_per_unit: 0.7
+
+  - id: "LANE_WHB_CUST3"
+    origin: "WH_B"
+    destination: "CUST_3"
+    mode: "road"
+    lead_time_mean: 2.0
+    lead_time_std: 0.4
+    cost_per_unit: 3.2
+    capacity: 90.0
+    co2_per_unit: 0.8
