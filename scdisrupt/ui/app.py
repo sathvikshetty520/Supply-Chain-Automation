@@ -165,9 +165,9 @@ with tab_overview:
     with col_t2:
         st.metric("Active Transport Lanes", graph.number_of_edges())
     with col_t3:
-        st.metric("Currencies", len(config.currencies))
+        st.metric("Suppliers", len(config.suppliers))
     with col_t4:
-        st.metric("Products Tracked", len(config.products))
+        st.metric("Demand Centers", len(config.customers))
 
     # Network Node Table
     node_rows = []
@@ -175,13 +175,13 @@ with tab_overview:
         inv = d.get("inventory_policy")
         node_rows.append(
             {
-                "Node ID": nid,
-                "Name": d.get("name", nid),
-                "Type": d.get("type", "unknown").capitalize(),
-                "Location": d.get("location", ""),
-                "Initial Inventory": inv.initial_inventory if inv else "-",
-                "Safety Stock": inv.safety_stock if inv else "-",
-                "Max Capacity": inv.capacity if inv else d.get("daily_capacity", "-"),
+                "Node ID": str(nid),
+                "Name": str(d.get("name", nid)),
+                "Type": str(d.get("type", "unknown")).capitalize(),
+                "Location": str(d.get("location", "")),
+                "Initial Inventory": str(inv.initial_inventory) if inv and inv.initial_inventory is not None else "-",
+                "Safety Stock": str(inv.safety_stock) if inv and inv.safety_stock is not None else "-",
+                "Max Capacity": str(inv.capacity if inv and inv.capacity is not None else d.get("daily_capacity", "-")),
             }
         )
     df_nodes = pd.DataFrame(node_rows)
@@ -355,16 +355,16 @@ if run_button or "cascade_result" in st.session_state:
             # Comparison Bar Chart
             df_comp = pd.DataFrame(
                 {
-                    "Metric": ["Service Level (%)", "Total Cost ($k)", "Stockout Days"],
+                    "Metric": ["Service Level (%)", "Mean Cost ($k)", "Mean CO2 (t)"],
                     "Baseline": [
                         cascade.baseline_summary.mean_service_level * 100,
-                        cascade.baseline_summary.mean_total_cost / 1000,
-                        cascade.baseline_summary.mean_stockout_days,
+                        cascade.baseline_summary.mean_cost / 1000,
+                        cascade.baseline_summary.mean_co2 / 1000,
                     ],
                     "Disrupted": [
                         cascade.disrupted_summary.mean_service_level * 100,
-                        cascade.disrupted_summary.mean_total_cost / 1000,
-                        cascade.disrupted_summary.mean_stockout_days,
+                        cascade.disrupted_summary.mean_cost / 1000,
+                        cascade.disrupted_summary.mean_co2 / 1000,
                     ],
                 }
             )
@@ -380,7 +380,16 @@ if run_button or "cascade_result" in st.session_state:
 
         with col_cas_2:
             st.write("**Disruption Shock Attributes**")
-            st.json(cascade.disruption_event.to_dict())
+            st.json({
+                "scenario": disruption_type,
+                "disruption_name": cascade.disruption_name,
+                "revenue_at_risk": cascade.revenue_at_risk,
+                "cost_delta": cascade.cost_delta,
+                "service_level_delta": cascade.service_level_delta,
+                "first_stockout_node": cascade.first_stockout_node,
+                "first_stockout_day": cascade.first_stockout_day,
+                "vulnerable_nodes": cascade.vulnerable_nodes_ranked,
+            })
 
     # Tab 3: Autonomous Recovery Plans
     with tab_recovery:
@@ -413,12 +422,14 @@ if run_button or "cascade_result" in st.session_state:
             with st.expander(f"Plan #{sp.rank}: {sp.plan_name} — Score: {sp.final_score:.1f}"):
                 act_rows = []
                 for act in sp.raw_result.plan.actions:
+                    act_type_val = act.action_type.value if hasattr(act.action_type, "value") else str(act.action_type)
                     act_rows.append(
                         {
-                            "Action Type": act.action_type.capitalize(),
-                            "Target": act.target_id,
-                            "Proposed Quantity": act.quantity,
+                            "Agent": act.agent.capitalize(),
+                            "Action Type": act_type_val.replace("_", " ").title(),
+                            "Target Node/Lane": act.target_id,
                             "Estimated Cost ($)": f"${act.estimated_cost:,.2f}",
+                            "Description": act.description or "-",
                             "Parameters": str(act.parameters),
                         }
                     )
