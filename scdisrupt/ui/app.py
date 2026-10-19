@@ -211,19 +211,17 @@ with tab_overview:
 
     # Topology Graph Visual
     st.write("**Interactive Graph Layout**")
-    pos_map = {
-        "SUP_1": (1, 3), "SUP_2": (1, 1),
-        "PORT_ORIGIN": (3, 2),
-        "PORT_DEST": (5, 2),
-        "DC_1": (7, 3), "DC_2": (7, 1),
-        "RETAIL_1": (9, 3), "RETAIL_2": (9, 1),
-    }
+    import networkx as nx
+    try:
+        pos = nx.spring_layout(graph, seed=42, k=1.2)
+    except Exception:
+        pos = {n: (i, i % 3) for i, n in enumerate(graph.nodes())}
     
     edge_x = []
     edge_y = []
     for u, v in graph.edges():
-        x0, y0 = pos_map.get(u, (0, 0))
-        x1, y1 = pos_map.get(v, (10, 0))
+        x0, y0 = pos.get(u, (0.0, 0.0))
+        x1, y1 = pos.get(v, (1.0, 1.0))
         edge_x.extend([x0, x1, None])
         edge_y.extend([y0, y1, None])
 
@@ -240,18 +238,18 @@ with tab_overview:
     node_colors = []
     color_scheme = {
         "supplier": "#3B82F6",
+        "factory": "#EC4899",
+        "warehouse": "#8B5CF6",
+        "customer": "#10B981",
         "port": "#F59E0B",
         "dc": "#8B5CF6",
-        "distribution_center": "#8B5CF6",
-        "retailer": "#10B981",
-        "store": "#10B981",
     }
     for nid, d in graph.nodes(data=True):
-        x, y = pos_map.get(nid, (5, 2))
+        x, y = pos.get(nid, (0.5, 0.5))
         node_x.append(x)
         node_y.append(y)
-        node_text.append(f"{nid} ({d.get('type')})<br>{d.get('name')}")
         ntype = str(d.get("type", "")).lower()
+        node_text.append(f"<b>{nid}</b> ({ntype})<br>{d.get('name', '')}<br>Location: {d.get('location', 'N/A')}")
         node_colors.append(color_scheme.get(ntype, "#64748B"))
 
     node_trace = go.Scatter(
