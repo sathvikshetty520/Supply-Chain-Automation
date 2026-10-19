@@ -40,7 +40,7 @@ class ExecutiveBriefingGenerator:
         action_list_str = "\n".join(action_items) if action_items else "No immediate actions required."
 
         briefing = (
-            f"# [INCIDENT RESPONSE BRIEFING]\n\n"
+            f"# [EXECUTIVE INCIDENT RESPONSE BRIEFING]\n\n"
             f"**INCIDENT**: {cascade.disruption_name}\n"
             f"**STATUS**: Active Cascade Detected | Autonomous Recovery Plan Recommended\n\n"
             f"---\n\n"
