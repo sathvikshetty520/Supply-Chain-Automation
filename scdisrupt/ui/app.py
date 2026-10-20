@@ -143,6 +143,13 @@ runs = st.sidebar.slider("Monte Carlo Runs", 1, 20, 5, 1)
 sim_days = st.sidebar.slider("Horizon (Days)", 15, 90, 45, 5)
 random_seed = st.sidebar.number_input("Random Seed", value=42, step=1)
 
+with st.sidebar.expander("⚖️ Multi-Criteria Scorer Weights", expanded=False):
+    st.caption("Adjust policy weights for candidate ranking (auto-normalized):")
+    w_cost = st.slider("Cost Weight", 0.0, 1.0, 0.35, 0.05)
+    w_sl = st.slider("Service Level Weight", 0.0, 1.0, 0.35, 0.05)
+    w_co2 = st.slider("Carbon / CO2 Weight", 0.0, 1.0, 0.15, 0.05)
+    w_resil = st.slider("Resilience Weight", 0.0, 1.0, 0.15, 0.05)
+
 run_button = st.sidebar.button("Run Simulation & Recovery", type="primary", use_container_width=True)
 
 # Main Title & Subtitle
@@ -201,13 +208,25 @@ with tab_overview:
         )
     df_lanes = pd.DataFrame(lane_rows)
 
+    # Filters for tables
+    f_col1, f_col2 = st.columns([1, 1])
+    with f_col1:
+        types_avail = sorted(list(df_nodes["Type"].unique()))
+        selected_types = st.multiselect("Filter Nodes by Type", options=types_avail, default=types_avail)
+    with f_col2:
+        modes_avail = sorted(list(df_lanes["Transport Mode"].unique()))
+        selected_modes = st.multiselect("Filter Lanes by Mode", options=modes_avail, default=modes_avail)
+
+    df_nodes_filtered = df_nodes[df_nodes["Type"].isin(selected_types)] if selected_types else df_nodes
+    df_lanes_filtered = df_lanes[df_lanes["Transport Mode"].isin(selected_modes)] if selected_modes else df_lanes
+
     c_left, c_right = st.columns([1, 1])
     with c_left:
-        st.write("**Nodes & Facilities**")
-        st.dataframe(df_nodes, use_container_width=True, hide_index=True)
+        st.write(f"**Nodes & Facilities ({len(df_nodes_filtered)}/{len(df_nodes)})**")
+        st.dataframe(df_nodes_filtered, use_container_width=True, hide_index=True)
     with c_right:
-        st.write("**Transportation Lanes & Lead Times**")
-        st.dataframe(df_lanes, use_container_width=True, hide_index=True)
+        st.write(f"**Transportation Lanes & Lead Times ({len(df_lanes_filtered)}/{len(df_lanes)})**")
+        st.dataframe(df_lanes_filtered, use_container_width=True, hide_index=True)
 
     # Topology Graph Visual
     st.write("**Interactive Graph Layout**")
@@ -303,7 +322,12 @@ if run_button or "cascade_result" in st.session_state:
                 sim_duration_days=sim_days,
                 base_seed=int(random_seed),
             )
-            scorer = PlanScorer(weight_cost=0.35, weight_service_level=0.35, weight_co2=0.15, weight_resilience=0.15)
+            scorer = PlanScorer(
+                weight_cost=w_cost,
+                weight_service_level=w_sl,
+                weight_co2=w_co2,
+                weight_resilience=w_resil,
+            )
             scored_plans = scorer.score_plans(counterfactual_results)
             pareto_plans = get_pareto_plans(counterfactual_results)
 
@@ -311,10 +335,22 @@ if run_button or "cascade_result" in st.session_state:
             briefing_text = generator.generate_briefing(cascade, scored_plans, pareto_plans)
 
             st.session_state["cascade_result"] = cascade
+            st.session_state["counterfactual_results"] = counterfactual_results
             st.session_state["plans"] = plans
             st.session_state["scored_plans"] = scored_plans
             st.session_state["pareto_plans"] = pareto_plans
             st.session_state["briefing_text"] = briefing_text
+
+    # Re-score if weights changed dynamically without re-running full simulation
+    if "counterfactual_results" in st.session_state:
+        scorer = PlanScorer(
+            weight_cost=w_cost,
+            weight_service_level=w_sl,
+            weight_co2=w_co2,
+            weight_resilience=w_resil,
+        )
+        scored_plans = scorer.score_plans(st.session_state["counterfactual_results"])
+        st.session_state["scored_plans"] = scored_plans
 
     cascade = st.session_state["cascade_result"]
     scored_plans = st.session_state["scored_plans"]
@@ -379,17 +415,58 @@ if run_button or "cascade_result" in st.session_state:
             st.plotly_chart(fig_bar, use_container_width=True)
 
         with col_cas_2:
-            st.write("**Disruption Shock Attributes**")
-            st.json({
-                "scenario": disruption_type,
-                "disruption_name": cascade.disruption_name,
-                "revenue_at_risk": cascade.revenue_at_risk,
-                "cost_delta": cascade.cost_delta,
-                "service_level_delta": cascade.service_level_delta,
-                "first_stockout_node": cascade.first_stockout_node,
-                "first_stockout_day": cascade.first_stockout_day,
-                "vulnerable_nodes": cascade.vulnerable_nodes_ranked,
-            })
+            st.write("**Vulnerable Facilities by Stockout Probability**")
+            if cascade.vulnerable_nodes_ranked:
+                df_vuln = pd.DataFrame(cascade.vulnerable_nodes_ranked)
+                df_vuln_display = df_vuln.rename(
+                    columns={
+                        "node_id": "Node ID",
+                        "node_name": "Facility Name",
+                        "disrupted_prob": "Disrupted Stockout Prob",
+                        "baseline_prob": "Baseline Stockout Prob",
+                        "delta_prob": "Risk Delta",
+                    }
+                )
+                fig_vuln = px.bar(
+                    df_vuln_display,
+                    x="Disrupted Stockout Prob",
+                    y="Facility Name",
+                    orientation="h",
+                    color="Risk Delta",
+                    color_continuous_scale="Reds",
+                    title="Facility Stockout Risk (Disrupted)",
+                )
+                fig_vuln.update_layout(yaxis=dict(autorange="reversed"), height=300)
+                st.plotly_chart(fig_vuln, use_container_width=True)
+            else:
+                st.info("No vulnerable facility data recorded.")
+
+        # Stockout propagation timeline chart
+        if cascade.stockout_timeline:
+            st.markdown("---")
+            st.write("**Disruption Stockout Propagation Sequence**")
+            tl_data = [
+                {
+                    "Day": evt.day,
+                    "Node ID": evt.node_id,
+                    "Facility": evt.node_name,
+                    "Unmet Demand": evt.unmet_demand,
+                    "Backorders": evt.backorders,
+                }
+                for evt in cascade.stockout_timeline
+            ]
+            df_tl = pd.DataFrame(tl_data)
+            fig_tl = px.scatter(
+                df_tl,
+                x="Day",
+                y="Facility",
+                size="Backorders" if df_tl["Backorders"].sum() > 0 else "Unmet Demand",
+                color="Facility",
+                hover_data=["Day", "Node ID", "Unmet Demand", "Backorders"],
+                title="Stockout Failure Propagation Over Time",
+            )
+            fig_tl.update_traces(marker=dict(symbol="diamond", line=dict(width=1, color="black")))
+            st.plotly_chart(fig_tl, use_container_width=True)
 
     # Tab 3: Autonomous Recovery Plans
     with tab_recovery:
@@ -456,19 +533,59 @@ if run_button or "cascade_result" in st.session_state:
             )
         df_pareto = pd.DataFrame(pareto_scatter_data)
 
-        fig_scatter = px.scatter(
-            df_pareto,
-            x="Total Cost ($)",
-            y="Service Level (%)",
-            color="Pareto Frontier",
-            size="Score",
-            hover_name="Plan",
-            hover_data={"Total Cost ($)": ":$,.0f", "Service Level (%)": ":.1f%", "Score": ":.1f"},
-            color_discrete_map={"Pareto Optimal": "#10B981", "Dominated": "#94A3B8"},
-            title="Pareto Optimal Frontier (Service Level vs Cost)",
-        )
-        fig_scatter.update_traces(marker=dict(line=dict(width=1, color="DarkSlateGrey")))
-        st.plotly_chart(fig_scatter, use_container_width=True)
+        col_p1, col_p2 = st.columns([1, 1])
+        with col_p1:
+            fig_scatter = px.scatter(
+                df_pareto,
+                x="Total Cost ($)",
+                y="Service Level (%)",
+                color="Pareto Frontier",
+                size="Score",
+                hover_name="Plan",
+                hover_data={"Total Cost ($)": ":$,.0f", "Service Level (%)": ":.1f%", "Score": ":.1f"},
+                color_discrete_map={"Pareto Optimal": "#10B981", "Dominated": "#94A3B8"},
+                title="Pareto Frontier: Cost vs. Service Level",
+            )
+            fig_scatter.update_traces(marker=dict(line=dict(width=1, color="DarkSlateGrey")))
+            st.plotly_chart(fig_scatter, use_container_width=True)
+
+        with col_p2:
+            st.write("**Multi-Dimensional Policy Comparison (Radar Profile)**")
+            categories = ["Cost Efficiency", "Service Level", "CO2 Conservation", "Resilience"]
+            fig_radar = go.Figure()
+            colors = ["#3B82F6", "#10B981", "#F59E0B", "#EC4899"]
+
+            for idx, sp in enumerate(scored_plans):
+                r_vals = [
+                    sp.normalized_cost_score * 100,
+                    sp.normalized_service_score * 100,
+                    sp.normalized_co2_score * 100,
+                    sp.normalized_resilience_score * 100,
+                ]
+                # Close the radar loop
+                r_vals.append(r_vals[0])
+                cat_closed = categories + [categories[0]]
+                fig_radar.add_trace(
+                    go.Scatterpolar(
+                        r=r_vals,
+                        theta=cat_closed,
+                        fill="toself",
+                        name=f"#{sp.rank}: {sp.plan_name}",
+                        line_color=colors[idx % len(colors)],
+                        opacity=0.65,
+                    )
+                )
+
+            fig_radar.update_layout(
+                polar=dict(
+                    radialaxis=dict(visible=True, range=[0, 100]),
+                ),
+                showlegend=True,
+                title="Normalized Performance Criteria (0-100)",
+                height=380,
+                margin=dict(t=40, b=30, l=40, r=40),
+            )
+            st.plotly_chart(fig_radar, use_container_width=True)
 
     # Tab 5: Executive Briefing
     with tab_briefing:
