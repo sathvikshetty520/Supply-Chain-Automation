@@ -72,3 +72,25 @@ def test_recover_endpoint(client):
     assert top_plan["rank"] == 1
     assert "actions" in top_plan
     assert len(top_plan["actions"]) > 0
+
+
+def test_new_disruption_types_api(client):
+    for dtype, params in [
+        ("cyberattack", {"target_node_id": "FAC_1", "throughput_reduction": 0.5}),
+        ("canal_blockage", {"lead_time_multiplier": 3.0, "cost_multiplier": 1.4}),
+        ("raw_material_ban", {"supplier_ids": ["SUP_1"], "capacity_curtailment": 0.8}),
+    ]:
+        payload = {
+            "disruption": {
+                "disruption_type": dtype,
+                "parameters": params,
+            },
+            "runs": 2,
+            "sim_days": 10,
+            "seed": 42,
+        }
+        res = client.post("/simulate/cascade", json=payload)
+        assert res.status_code == 200, f"Failed for {dtype}: {res.text}"
+        data = res.json()
+        assert "disrupted_summary" in data
+

@@ -22,6 +22,9 @@ from scdisrupt.disruptions.catalog import (
     SupplierFailureDisruption,
     DemandSurgeDisruption,
     CurrencyShockDisruption,
+    CyberattackDisruption,
+    CanalBlockageDisruption,
+    RawMaterialExportBanDisruption,
 )
 from scdisrupt.disruptions.cascade import analyze_cascade
 from scdisrupt.agents.orchestrator import AgentOrchestrator
@@ -118,7 +121,15 @@ st.sidebar.subheader("Disruption Shock Injection")
 
 disruption_type = st.sidebar.selectbox(
     "Disruption Type",
-    options=["Port Strike", "Supplier Failure", "Demand Surge", "Currency Shock"],
+    options=[
+        "Port Strike",
+        "Supplier Failure",
+        "Demand Surge",
+        "Currency Shock",
+        "Cyberattack / Ransomware",
+        "Canal Blockage",
+        "Raw Material Export Embargo",
+    ],
     index=0,
 )
 
@@ -133,9 +144,28 @@ elif disruption_type == "Supplier Failure":
 elif disruption_type == "Demand Surge":
     surge_f = st.sidebar.slider("Surge Factor", 1.1, 3.0, 1.4, 0.1)
     disruption = DemandSurgeDisruption(surge_factor=surge_f)
-else:
+elif disruption_type == "Currency Shock":
     cost_m = st.sidebar.slider("Cost Multiplier", 1.1, 2.5, 1.25, 0.05)
     disruption = CurrencyShockDisruption(cost_multiplier=cost_m)
+elif disruption_type == "Cyberattack / Ransomware":
+    targetable = [n for n, d in graph.nodes(data=True) if d.get("type") in ["factory", "warehouse"]]
+    sel_node = st.sidebar.selectbox("Target Facility", options=targetable if targetable else ["FAC_1"])
+    tp_red = st.sidebar.slider("Throughput Reduction", 0.3, 1.0, 0.85, 0.05)
+    disruption = CyberattackDisruption(target_node_id=sel_node, throughput_reduction=tp_red)
+elif disruption_type == "Canal Blockage":
+    c_lt = st.sidebar.slider("Canal Lead Time Multiplier", 2.0, 8.0, 4.0, 0.5)
+    c_cost = st.sidebar.slider("Fuel Surcharge Multiplier", 1.2, 2.5, 1.6, 0.1)
+    disruption = CanalBlockageDisruption(lead_time_multiplier=c_lt, cost_multiplier=c_cost)
+else:
+    supp_nodes = [n for n, d in graph.nodes(data=True) if d.get("type") == "supplier"]
+    sel_suppliers = st.sidebar.multiselect("Embargoed Suppliers", options=supp_nodes, default=supp_nodes[:1])
+    curtail = st.sidebar.slider("Export Curtailment", 0.2, 1.0, 0.90, 0.05)
+    tariff = st.sidebar.slider("Spot Tariff Surcharge", 1.1, 3.0, 1.75, 0.05)
+    disruption = RawMaterialExportBanDisruption(
+        supplier_ids=sel_suppliers if sel_suppliers else ["SUP_1"],
+        capacity_curtailment=curtail,
+        tariff_surcharge=tariff,
+    )
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("Simulation Parameters")

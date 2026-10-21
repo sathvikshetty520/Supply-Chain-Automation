@@ -51,7 +51,7 @@ graph TD
    - Comprehensive metric tracking: Fill rate, Mean Service Level, Stockout Days, Total Landed Cost, and Lost Revenue.
 
 3. **Disruption Catalog & Cascade Modeling (`scdisrupt.disruptions`)**
-   - Injectable shock scenarios: Port Strikes, Supplier Facility Outages, Sudden Demand Surges, and Currency/Tariff Shocks.
+   - Injectable shock scenarios: Maritime Port Strikes, Supplier Facility Outages, Sudden Demand Surges, Currency/Fuel Inflation Shocks, Cyberattack/Ransomware Infrastructure Failures, Canal Chokepoint & Blockages, and Geopolitical Raw Material Export Embargoes.
    - Traces bottleneck propagation upstream and downstream, computing earliest point-of-failure and Revenue-at-Risk.
 
 4. **Multi-Agent Autonomous Recovery System (`scdisrupt.agents` & `scdisrupt.optimizer`)**

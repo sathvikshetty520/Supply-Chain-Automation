@@ -4,7 +4,15 @@ from pydantic import BaseModel, Field
 
 
 class DisruptionRequest(BaseModel):
-    disruption_type: Literal["port_strike", "supplier_failure", "demand_surge", "currency_shock"] = "port_strike"
+    disruption_type: Literal[
+        "port_strike",
+        "supplier_failure",
+        "demand_surge",
+        "currency_shock",
+        "cyberattack",
+        "canal_blockage",
+        "raw_material_ban",
+    ] = "port_strike"
     parameters: Dict[str, Any] = Field(default_factory=dict)
 
 

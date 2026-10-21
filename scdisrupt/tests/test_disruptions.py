@@ -8,6 +8,9 @@ from scdisrupt.disruptions.catalog import (
     PortStrikeDisruption,
     CurrencyShockDisruption,
     DemandSurgeDisruption,
+    CyberattackDisruption,
+    CanalBlockageDisruption,
+    RawMaterialExportBanDisruption,
 )
 from scdisrupt.disruptions.cascade import analyze_cascade
 
@@ -63,3 +66,41 @@ def test_cascade_analysis_runner(sample_graph):
     assert cascade.revenue_at_risk >= 0.0
     assert isinstance(cascade.vulnerable_nodes_ranked, list)
     assert len(cascade.vulnerable_nodes_ranked) > 0
+
+
+def test_cyberattack_disruption(sample_graph):
+    disruption = CyberattackDisruption(target_node_id="FAC_1", throughput_reduction=0.80)
+    disrupted = disruption.apply(sample_graph)
+
+    fac_cap = sample_graph.nodes["FAC_1"]["daily_capacity"]
+    assert disrupted.nodes["FAC_1"]["daily_capacity"] == pytest.approx(fac_cap * 0.20)
+    assert disrupted.nodes["FAC_1"]["cyberattacked"] is True
+    # Inbound/outbound edges should have doubled lead times
+    for u, v, attrs in disrupted.edges(data=True):
+        if u == "FAC_1" or v == "FAC_1":
+            assert attrs.get("lead_time_multiplier", 1.0) >= 2.0
+
+
+def test_canal_blockage_disruption(sample_graph):
+    disruption = CanalBlockageDisruption(lead_time_multiplier=4.0, cost_multiplier=1.60)
+    disrupted = disruption.apply(sample_graph)
+
+    ocean_edge = disrupted.edges[("FAC_1", "WH_A")]
+    assert ocean_edge["lead_time_multiplier"] == 4.0
+    assert ocean_edge["cost_multiplier"] == 1.60
+    assert ocean_edge["co2_per_unit"] == pytest.approx(sample_graph.edges[("FAC_1", "WH_A")]["co2_per_unit"] * 1.40)
+
+
+def test_raw_material_export_ban_disruption(sample_graph):
+    disruption = RawMaterialExportBanDisruption(
+        supplier_ids=["SUP_1"],
+        capacity_curtailment=0.90,
+        tariff_surcharge=1.75,
+    )
+    disrupted = disruption.apply(sample_graph)
+
+    sup_cap = sample_graph.nodes["SUP_1"]["daily_capacity"]
+    assert disrupted.nodes["SUP_1"]["daily_capacity"] == pytest.approx(sup_cap * 0.10)
+    assert disrupted.nodes["SUP_1"]["embargoed"] is True
+    assert disrupted.nodes["SUP_1"]["unit_cost"] == pytest.approx(sample_graph.nodes["SUP_1"]["unit_cost"] * 1.75)
+
